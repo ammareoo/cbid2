@@ -40,23 +40,41 @@ function QuestionBlock({ q, index, attemptId, locked, onSaveState }: {
   const [selected, setSelected] = useState<string[]>(q.answer?.selectedOptionIds ?? []);
   const [text, setText] = useState(q.answer?.textAnswer ?? '');
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const revision = useRef(0);
+  const [saveFailed, setSaveFailed] = useState(false);
+
+  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const save = useMutation({
-    mutationFn: (body: { selectedOptionIds?: string[]; textAnswer?: string }) => api.put(`/attempts/${attemptId}/answers/${q.id}`, body),
-    onMutate: () => onSaveState(q.id, 'saving'),
-    onSuccess: () => onSaveState(q.id, 'saved'),
-    onError: () => onSaveState(q.id, 'error'),
+    // Keep writes in input order, even when the server responds slowly.
+    scope: { id: `quiz-answer-${attemptId}-${q.id}` },
+    mutationFn: ({ body }: { body: { selectedOptionIds?: string[]; textAnswer?: string }; revision: number }) => api.put(`/attempts/${attemptId}/answers/${q.id}`, body),
+    onSuccess: (_, variables) => {
+      if (variables.revision === revision.current) onSaveState(q.id, 'saved');
+    },
+    onError: (_, variables) => {
+      if (variables.revision === revision.current) {
+        setSaveFailed(true);
+        onSaveState(q.id, 'error');
+      }
+    },
   });
+  const beginSave = () => {
+    setSaveFailed(false);
+    onSaveState(q.id, 'saving');
+    return ++revision.current;
+  };
 
   const choose = (id: string, checked: boolean) => {
     const next = q.kind === 'single' ? [id] : checked ? [...selected, id] : selected.filter((x) => x !== id);
     setSelected(next);
-    save.mutate({ selectedOptionIds: next });
+    save.mutate({ body: { selectedOptionIds: next }, revision: beginSave() });
   };
   const typeAnswer = (v: string) => {
     setText(v);
+    const nextRevision = beginSave();
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => save.mutate({ textAnswer: v }), 600);
+    timer.current = setTimeout(() => save.mutate({ body: { textAnswer: v }, revision: nextRevision }), 600);
   };
 
   const result = q.answer?.isCorrect;
@@ -89,6 +107,9 @@ function QuestionBlock({ q, index, attemptId, locked, onSaveState }: {
         </p>
       )}
       {locked && !q.answer && <p className="meta" style={{ marginTop: 'var(--s-3)' }}>Not answered</p>}
+      {saveFailed && !locked && <button type="button" className="btn btn--secondary" onClick={() => save.mutate({
+        body: q.kind === 'short' ? { textAnswer: text } : { selectedOptionIds: selected }, revision: beginSave(),
+      })}>Retry saving this answer</button>}
     </fieldset>
   );
 }
@@ -149,12 +170,12 @@ export default function QuizAttempt() {
                       {anyError ? <Badge tone="danger">An answer did not save. Check your connection and try again.</Badge>
                         : anySaving ? 'Saving…' : `${answered} of ${d.questions.length} answered · all changes saved`}
                     </p>
-                    <button type="button" className="btn btn--primary" onClick={() => setConfirm(true)} disabled={anySaving || submit.isPending}>Submit quiz</button>
+                    <button type="button" className="btn btn--primary" onClick={() => setConfirm(true)} disabled={anySaving || anyError || submit.isPending}>Submit quiz</button>
                   </div></div>
                 )}
               </div>
               <ConfirmDialog open={confirm} onClose={() => setConfirm(false)} title="Submit this attempt?" confirmLabel="Submit"
-                busy={submit.isPending} onConfirm={() => submit.mutate()}
+                busy={anySaving || anyError || submit.isPending} onConfirm={() => submit.mutate()}
                 body={<p>{answered < d.questions.length ? <><strong>{d.questions.length - answered} questions are unanswered.</strong> </> : null}You cannot change your answers after submitting.</p>} />
             </>
           );

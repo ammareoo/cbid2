@@ -11,7 +11,7 @@
 
 \set ON_ERROR_STOP on
 
-SELECT 'CREATE ROLE cbid_owner LOGIN CREATEROLE PASSWORD ' || quote_literal(:owner_pw)
+SELECT 'CREATE ROLE cbid_owner LOGIN NOCREATEROLE PASSWORD ' || quote_literal(:owner_pw)
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cbid_owner') \gexec
 SELECT 'CREATE ROLE cbid_app LOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE PASSWORD ' || quote_literal(:app_pw)
 WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'cbid_app') \gexec

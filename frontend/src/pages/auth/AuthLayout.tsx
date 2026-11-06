@@ -49,7 +49,7 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </div>
             <p className="auth__brand-tag">
               <span className="auth__brand-tag-text">
-                Centre of Excellence of
+                Centre of Excellence
                 <br />
                 {b.organisation_name}
               </span>

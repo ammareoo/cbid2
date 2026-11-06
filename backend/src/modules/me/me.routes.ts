@@ -1,8 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { fileTypeFromBuffer } from 'file-type';
 import type { Tx } from '../../db/pool.js';
 import { audit } from '../../lib/audit.js';
 import { text } from '../../lib/http.js';
+import { badRequest, notFound, AppError } from '../../lib/errors.js';
 import type { AuthContext } from '../../types.js';
 import { myCourses } from '../courses/courses.service.js';
 
@@ -74,9 +76,47 @@ export default async function meRoutes(app: FastifyInstance) {
   app.get('/profile', async (req) =>
     req.db((tx) => tx.one(
       `SELECT u.id, u.email, u.full_name AS "fullName", u.preferred_name AS "preferredName", u.role, u.timezone,
-              u.last_login_at AS "lastLoginAt", u.created_at AS "createdAt", d.name AS "departmentName"
-         FROM users u LEFT JOIN departments d ON d.id = u.department_id WHERE u.id = $1`, [req.auth!.userId])),
+              u.last_login_at AS "lastLoginAt", u.created_at AS "createdAt", d.name AS "departmentName",
+              p.updated_at AS "photoUpdatedAt"
+         FROM users u LEFT JOIN departments d ON d.id = u.department_id
+         LEFT JOIN user_profile_photos p ON p.user_id = u.id WHERE u.id = $1`, [req.auth!.userId])),
   );
+
+  app.get('/profile/photo', async (req, reply) => {
+    const photo = await req.db((tx) => tx.maybeOne<{ image: Buffer; mime_type: string }>(
+      'SELECT image, mime_type FROM user_profile_photos WHERE user_id = $1', [req.auth!.userId]));
+    if (!photo) throw notFound('Profile photo');
+    return reply.header('Content-Type', photo.mime_type).header('Cache-Control', 'private, no-store')
+      .header('X-Content-Type-Options', 'nosniff').send(photo.image);
+  });
+
+  app.post('/profile/photo', async (req) => {
+    if (!req.isMultipart()) throw badRequest('Choose an image to upload');
+    const limit = Math.min(2, app.config.MAX_UPLOAD_MB) * 1048576;
+    const part = await req.file({ limits: { fileSize: limit + 1, files: 1 } });
+    if (!part) throw badRequest('Choose an image to upload');
+    const image = await part.toBuffer();
+    if (image.length > limit) throw new AppError(413, 'payload_too_large', `Profile photos must be ${limit / 1048576} MB or smaller`);
+    const detected = await fileTypeFromBuffer(image);
+    if (!detected || !['image/jpeg', 'image/png', 'image/webp'].includes(detected.mime)) {
+      throw new AppError(415, 'unsupported_media_type', 'Choose a JPG, PNG, or WebP image');
+    }
+    await req.db(async (tx) => {
+      await tx.query(`INSERT INTO user_profile_photos (user_id, image, mime_type) VALUES ($1, $2, $3)
+        ON CONFLICT (user_id) DO UPDATE SET image = EXCLUDED.image, mime_type = EXCLUDED.mime_type, updated_at = now()`,
+      [req.auth!.userId, image, detected.mime]);
+      await audit(tx, req, 'profile.photo_updated', 'user', req.auth!.userId);
+    });
+    return { updated: true };
+  });
+
+  app.delete('/profile/photo', async (req, reply) => {
+    await req.db(async (tx) => {
+      await tx.query('DELETE FROM user_profile_photos WHERE user_id = $1', [req.auth!.userId]);
+      await audit(tx, req, 'profile.photo_removed', 'user', req.auth!.userId);
+    });
+    return reply.code(204).send();
+  });
 
   app.patch('/profile', async (req) => {
     const body = profilePatch.parse(req.body);

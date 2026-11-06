@@ -1,4 +1,4 @@
-import { z, type ZodTypeAny } from 'zod';
+ import { z, type ZodTypeAny } from 'zod';
 import type { FastifyRequest } from 'fastify';
 
 export const uuid = z.string().uuid({ message: 'Must be a valid id' });

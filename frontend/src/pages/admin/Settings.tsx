@@ -164,7 +164,7 @@ export default function AdminSettings() {
                           <div className="admin-settings__pulse-item">
                             <StatusLine ok={workerOk} label="Worker" />
                             <span className="admin-settings__pulse-sub">
-                              {x.workers.length === 0 ? 'Not running' : `Seen ${relative(x.workers[0].lastBeat)}`}
+                              {x.workers[0] ? `Seen ${relative(x.workers[0].lastBeat)}` : 'Not running'}
                             </span>
                           </div>
                         </div>

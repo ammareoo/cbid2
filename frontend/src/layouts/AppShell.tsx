@@ -2,17 +2,18 @@ import { useEffect, useId, useRef, useState, type ComponentType } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import {
-  Award, BookOpen, Building2, CalendarDays, ChevronDown, GraduationCap, LayoutDashboard, Library, LogOut,
+  Award, BookOpen, Building2, CalendarDays, ChevronDown, GraduationCap, LayoutDashboard, Library, LogOut, Menu,
   ScrollText, Settings, Settings2, Users, Info,
 } from 'lucide-react';
 import { api } from '../api/client';
 import { roleLabel, useAuth, useUser } from '../auth/AuthProvider';
 import { InstituteLogo, NetworkLogo } from '../components/ui';
-import { TeacherAvatar } from '../components/CourseMedia';
+import { ProfileAvatar } from '../components/ProfileAvatar';
+import { useToast } from '../components/Toast';
 import { NotificationsMenu } from '../components/NotificationsMenu';
 import { ContactDetails } from '../pages/auth/AuthLayout';
 import { useBranding } from '../hooks/misc';
-import { initials, setDisplayTimeZone } from '../utils/format';
+import { setDisplayTimeZone } from '../utils/format';
 import type { Role } from '../api/types';
 
 interface NavItem { to: string; label: string; icon: ComponentType<{ 'aria-hidden'?: boolean }>; end?: boolean }
@@ -49,24 +50,25 @@ const NAV: Record<Role, NavGroup[]> = {
   ],
 };
 
-function TopNavigation() {
+function SideNavigation({ onNavigate }: { onNavigate?: () => void }) {
   const user = useUser();
   return (
-    <nav className="top-nav" aria-label="Main">
-      <div className="top-nav__inner">
+    <nav id="sidebar-main-nav" className="sidebar__nav" aria-label="Main">
         {NAV[user.role].flatMap((g) => g.items).map((it) => (
-          <NavLink key={it.to} to={it.to} end={it.end}>
+          <NavLink key={it.to} to={it.to} end={it.end} aria-label={it.label} title={it.label} onClick={onNavigate}>
+            <it.icon aria-hidden />
             <span>{it.label}</span>
           </NavLink>
         ))}
-      </div>
     </nav>
   );
 }
 
 function AccountMenu() {
   const user = useUser();
+  const profile = useQuery({ queryKey: ['me', 'profile'], queryFn: () => api.get<{ photoUpdatedAt: string | null }>('/me/profile') });
   const { logout } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -98,7 +100,7 @@ function AccountMenu() {
         aria-controls={menuId}
         onClick={() => setOpen((v) => !v)}
       >
-        {user.role === 'teacher' ? <TeacherAvatar /> : <span className="avatar topbar__avatar" aria-hidden="true">{initials(user.fullName)}</span>}
+        <ProfileAvatar name={user.fullName} role={user.role} photoUpdatedAt={profile.data?.photoUpdatedAt} className="topbar__avatar" />
         <span className="topbar__account-meta">
           <span className="topbar__account-name">{name}</span>
           <span className="topbar__account-role">{roleLabel[user.role]}</span>
@@ -121,8 +123,12 @@ function AccountMenu() {
             className="topbar__dropdown-item topbar__dropdown-item--danger"
             onClick={async () => {
               setOpen(false);
-              await logout();
-              navigate('/login', { replace: true });
+              try {
+                await logout();
+                navigate('/login', { replace: true });
+              } catch {
+                toast('Sign-out could not be confirmed. Check your connection and try again.', 'error');
+              }
             }}
           >
             <LogOut aria-hidden="true" />
@@ -137,7 +143,7 @@ function AccountMenu() {
 export function AppShell() {
   const user = useUser();
   const location = useLocation();
-  const [scrolled, setScrolled] = useState(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const settings = useQuery({
     queryKey: ['settings', 'public'],
     queryFn: () => api.get<{ maintenance_banner?: string; institute_name?: string; organisation_name?: string }>('/settings/public'),
@@ -145,13 +151,6 @@ export function AppShell() {
   });
 
   useEffect(() => { setDisplayTimeZone(user.timezone); }, [user.timezone]);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 8);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
 
   // On navigation (not the first load, so the skip link stays first in tab order),
   // move focus to the new page's heading so screen-reader users hear where they landed.
@@ -169,20 +168,29 @@ export function AppShell() {
   const banner = settings.data?.maintenance_banner;
 
   return (
-    <div className="shell">
+    <div className={`shell${mobileNavOpen ? ' shell--nav-open' : ''}`}>
       <a className="skip-link" href="#main">Skip to main content</a>
+      <aside className="sidebar" aria-label="CBID Institute workspace navigation">
+        <div className="sidebar__header">
+          <Link to="/" className="sidebar__brand">
+            <InstituteLogo height={44} alt={settings.data?.institute_name ?? 'CBID Institute home'} />
+            <span className="sidebar__identity">
+              <strong>{settings.data?.institute_name ?? 'CBID Institute'}</strong>
+              <span>{roleLabel[user.role]} workspace</span>
+            </span>
+          </Link>
+        </div>
+        <button className="sidebar__toggle" type="button" aria-label={mobileNavOpen ? 'Collapse navigation' : 'Expand navigation'} aria-controls="sidebar-main-nav" aria-expanded={mobileNavOpen} onClick={() => setMobileNavOpen((open) => !open)}>
+          <Menu aria-hidden="true" /> <span>Navigation</span> <ChevronDown aria-hidden="true" />
+        </button>
+        <SideNavigation onNavigate={() => setMobileNavOpen(false)} />
+        <div className="sidebar__footer">
+          <NotificationsMenu />
+          <AccountMenu />
+        </div>
+      </aside>
       <div className="main-col">
         {banner && <div className="banner" role="status"><Info aria-hidden="true" />{banner}</div>}
-        <header className={`topbar${scrolled ? ' topbar--scrolled' : ''}`}>
-          <Link to="/" className="topbar__brand">
-            <InstituteLogo height={28} alt={settings.data?.institute_name ?? 'CBID Institute home'} />
-          </Link>
-          <TopNavigation />
-          <div className="topbar__actions">
-            <NotificationsMenu />
-            <AccountMenu />
-          </div>
-        </header>
         <main id="main" tabIndex={-1} className="main">
           <Outlet />
         </main>

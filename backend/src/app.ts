@@ -45,6 +45,19 @@ export async function buildApp(config: Config, opts: BuildOptions = {}): Promise
   const pool = opts.pool ?? createPool(config.DATABASE_URL, {
     max: config.DB_POOL_MAX, statementTimeoutMs: config.DB_STATEMENT_TIMEOUT_MS, appName: 'cbid-lms-api',
   });
+  if (config.NODE_ENV === 'production') {
+    try {
+      const result = await pool.query<{ safe: boolean }>(`SELECT session_user = 'cbid_app'
+        AND current_user = session_user AND NOT (rolsuper OR rolbypassrls OR rolcreaterole)
+        AND NOT pg_has_role(current_user, 'cbid_owner', 'MEMBER')
+        AND NOT has_column_privilege(current_user, 'public.users', 'password_hash', 'SELECT') AS safe
+        FROM pg_roles WHERE rolname = current_user`);
+      if (!result.rows[0]?.safe) throw new Error('Production API requires the restricted cbid_app database login');
+    } catch (err) {
+      if (!opts.pool) await pool.end();
+      throw err;
+    }
+  }
   const redis = opts.redis !== undefined ? opts.redis
     : config.REDIS_URL ? new Redis(config.REDIS_URL, { maxRetriesPerRequest: 1, enableOfflineQueue: false, lazyConnect: false }) : null;
 

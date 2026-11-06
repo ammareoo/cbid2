@@ -11,7 +11,7 @@ const KEY = 'cbid:display';
 const DEFAULTS: DisplayPrefs = { textSize: 100, spacious: false, reduceMotion: false, theme: 'system' };
 
 function read(): DisplayPrefs {
-  try {
+  try { 
     const raw = localStorage.getItem(KEY);
     return raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
   } catch {

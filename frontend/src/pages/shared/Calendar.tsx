@@ -131,13 +131,12 @@ export default function CalendarPage() {
           title="Calendar"
           actions={(
             <div className="courses-header-actions">
-              <div className="courses-tabs" role="tablist" aria-label="Filter calendar">
+              <div className="courses-tabs" role="group" aria-label="Filter calendar">
                 {FILTERS.map((f) => (
                   <button
                     key={f.id}
                     type="button"
-                    role="tab"
-                    aria-selected={filter === f.id}
+                    aria-pressed={filter === f.id}
                     className={`courses-tabs__tab${filter === f.id ? ' is-active' : ''}`}
                     onClick={() => setFilter(f.id)}
                   >
@@ -192,7 +191,7 @@ export default function CalendarPage() {
                   <div className="cal__weekdays" aria-hidden="true">
                     {WEEKDAYS.map((w) => <div key={w} className="cal__weekday">{w}</div>)}
                   </div>
-                  <div className="cal__grid" role="grid" aria-label={`${monthLabel(viewY, viewM)} calendar`}>
+                  <div className="cal__grid" role="group" aria-label={`${monthLabel(viewY, viewM)} calendar`}>
                     {cells.map((cell) => {
                       const dayItems = byDay.get(cell.key) ?? [];
                       const isToday = cell.key === todayKey;
@@ -203,8 +202,7 @@ export default function CalendarPage() {
                         <button
                           key={cell.key}
                           type="button"
-                          role="gridcell"
-                          aria-selected={isSelected}
+                          aria-pressed={isSelected}
                           aria-current={isToday ? 'date' : undefined}
                           aria-label={cellLabel(cell, dayItems.length)}
                           className={[

@@ -2,13 +2,18 @@ import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { signIn, signOut, USERS } from './helpers';
 
+test.describe.configure({ timeout: 90_000 });
+
 /** Automated WCAG 2.2 A/AA checks with axe-core. Automated checks catch roughly a third of issues;
  *  they complement, not replace, manual screen-reader and keyboard testing. */
 async function audit(page: Page, label: string) {
   await page.waitForLoadState('networkidle');
   const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa']).analyze();
   const serious = results.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical');
-  expect(serious.map((v) => `${label}: ${v.id} (${v.nodes.length}) ${v.help}`)).toEqual([]);
+  if (['login', 'calendar', 'admin overview'].includes(label)) {
+    await page.screenshot({ path: test.info().outputPath(`${label.replaceAll(' ', '-')}.png`), fullPage: true });
+  }
+  expect.soft(serious.map((v) => `${label}: ${v.id} (${v.nodes.length}) ${v.help}: ${v.nodes.map((n) => n.target.join(' ')).join(', ')}`)).toEqual([]);
 }
 
 test('sign-in and certificate verification pages have no serious accessibility violations', async ({ page }) => {

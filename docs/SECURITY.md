@@ -162,3 +162,11 @@ Role keys are shown as Learner (`student`) and Trainer (`teacher`) in the interf
 - **No antivirus scanning of uploads.** Integrate ClamAV or a scanning service if staff open student files on unmanaged machines.
 - **Local-disk file storage.** Object storage with signed URLs would be needed for multiple API hosts.
 - **No external penetration test** has been performed.
+
+## Release hardening — November 2026
+
+Production startup checks the actual PostgreSQL login is `cbid_app`, lacks superuser/BYPASSRLS/CREATEROLE privileges, is not a member of the schema-owner role and cannot select password hashes. The Passenger entry point rejects owner credentials in the web environment. cPanel username prefixes must be resolved through verified database provisioning; disabling these checks is not a deployment solution.
+
+Profile images are limited during multipart reading to 2 MB (or the lower configured upload limit), identified by file signature and limited to PNG/JPEG/WebP. Authenticated `/me/profile/photo` handlers derive ownership from the session and use owner-specific RLS; GET responses are private/no-store. Database-owner backups include the image bytes. Tests cover all roles, replacement/deletion, another user's data and malformed/oversized input.
+
+Scheduled maintenance uses `worker.js --once`, an advisory lock held on a dedicated connection, bounded batches, SMTP timeouts and a 120-second process deadline. Email delivery remains at-least-once: a process failure after SMTP accepts a message but before database commit can cause a retry. Operate one managed web process without Redis; shared rate limiting is required before increasing process count.

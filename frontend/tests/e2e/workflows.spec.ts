@@ -29,7 +29,7 @@ test('learner opens a course, reads content and submits an assignment', async ({
 
 test('trainer grades the submission and releases feedback', async ({ page }) => {
   await signIn(page, USERS.teacher);
-  const row = page.getByRole('row', { name: /Amina Khan.*Short barrier report/ });
+  const row = page.getByRole('region', { name: 'Needs grading' }).getByRole('listitem').filter({ hasText: 'Amina Khan' }).filter({ hasText: 'Short barrier report' });
   await expect(row).toBeVisible();
   await row.getByRole('link', { name: /Grade/ }).click();
 
@@ -110,7 +110,7 @@ test('administrator creates a person, creates and publishes a course', async ({ 
   await expect(page.getByText('Course updated')).toBeVisible();
   await expect(page.getByText('Published', { exact: true }).first()).toBeVisible();
 
-  await page.getByRole('link', { name: 'Audit log' }).first().click();
+  await page.getByRole('navigation', { name: 'Main', exact: true }).getByRole('link', { name: 'Audit', exact: true }).click();
   await expect(page.getByText('Published course').first()).toBeVisible();
   await signOut(page);
 });

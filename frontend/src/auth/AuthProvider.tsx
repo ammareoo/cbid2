@@ -54,12 +54,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [qc]);
 
   const logout = useCallback(async () => {
-    try { await api.post('/auth/logout'); } finally {
-      setCsrfToken(null);
-      // Keep the session query (observers stay attached) and drop everything else the user loaded.
-      qc.setQueryData(SESSION_KEY, null);
-      qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' });
-    }
+    await api.post('/auth/logout');
+    setCsrfToken(null);
+    qc.setQueryData(SESSION_KEY, null);
+    qc.removeQueries({ predicate: (q) => q.queryKey[0] !== 'session' });
   }, [qc]);
 
   const value = useMemo<AuthState>(() => ({

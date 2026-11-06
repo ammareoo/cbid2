@@ -61,7 +61,6 @@ export default function CertificateView() {
                 <div><dt>Date of issue</dt><dd>{formatDate(c.issuedAt)}</dd></div>
                 {c.issuedByName && <div><dt>Issued by</dt><dd>{c.issuedByName}</dd></div>}
                 <div><dt>Serial number</dt><dd className="serial">{c.serial}</dd></div>
-                <div className="certificate__verify"><dt>Verify at</dt><dd>{verifyUrl(c.serial).replace(/^https?:\/\//, '')}</dd></div>
               </dl>
               {c.revokedAt && <div className="certificate__void" aria-hidden="true"><span>REVOKED</span></div>}
             </article>

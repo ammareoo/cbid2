@@ -12,12 +12,17 @@ export async function sendPendingEmails(pool: Pool, mailer: Mailer, batch = 20):
   let sent = 0;
   let failed = 0;
   try {
-    await client.query('BEGIN');
-    const { rows } = await client.query<{ id: number; to_address: string; subject: string; body_text: string; attempts: number }>(
-      `SELECT id, to_address, subject, body_text, attempts FROM email_outbox
-        WHERE status = 'pending' AND next_attempt_at <= now()
-        ORDER BY id LIMIT $1 FOR UPDATE SKIP LOCKED`, [batch]);
-    for (const m of rows) {
+    for (let i = 0; i < batch; i++) {
+      await client.query('BEGIN');
+      const { rows } = await client.query<{ id: number; to_address: string; subject: string; body_text: string; attempts: number }>(
+        `SELECT id, to_address, subject, body_text, attempts FROM email_outbox
+          WHERE status = 'pending' AND next_attempt_at <= now()
+          ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED`);
+      const m = rows[0];
+      if (!m) {
+        await client.query('COMMIT');
+        break;
+      }
       try {
         await mailer.send({ to: m.to_address, subject: m.subject, text: m.body_text });
         await client.query(`UPDATE email_outbox SET status = 'sent', sent_at = now(), attempts = attempts + 1 WHERE id = $1`, [m.id]);
@@ -34,8 +39,8 @@ export async function sendPendingEmails(pool: Pool, mailer: Mailer, batch = 20):
           [m.id, attempts, (err as Error).message, give_up, 2 ** (attempts - 1)]);
         failed++;
       }
+      await client.query('COMMIT');
     }
-    await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK').catch(() => undefined);
     throw err;

@@ -39,8 +39,12 @@ async function request<T>(method: Method, path: string, body?: unknown, init: Re
       headers,
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
       ...init,
+      signal: init.signal ?? AbortSignal.timeout(isForm ? 120_000 : 30_000),
     });
-  } catch {
+  } catch (err) {
+    if (err && typeof err === 'object' && 'name' in err && err.name === 'TimeoutError') {
+      throw new ApiError(0, 'timeout', 'The server took too long to respond. Refresh to check the result.');
+    }
     throw new ApiError(0, 'network_error', 'We could not reach the server. Check your connection and try again.');
   }
 
@@ -51,6 +55,7 @@ async function request<T>(method: Method, path: string, body?: unknown, init: Re
     if (res.status === 401 && !path.startsWith('/auth/')) onUnauthorized?.();
     throw new ApiError(res.status, err.code ?? 'error', err.message ?? 'Something went wrong. Please try again.', err.details);
   }
+  if (data === null) throw new ApiError(502, 'invalid_response', 'The server returned an unexpected response. Refresh and try again.');
   return data as T;
 }
 

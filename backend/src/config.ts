@@ -67,7 +67,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   if (cfg.NODE_ENV === 'production') {
     if (!cfg.COOKIE_SECURE) throw new Error('COOKIE_SECURE must be true in production');
     if (!cfg.APP_ORIGIN.startsWith('https://')) throw new Error('APP_ORIGIN must use https in production');
-    if (/app_dev_pw|owner_dev_pw|change_me/.test(cfg.DATABASE_URL)) {
+    const databasePassword = decodeURIComponent(new URL(cfg.DATABASE_URL).password);
+    if (/app_dev_pw|owner_dev_pw|app_local_pw|owner_local_pw|change_me/i.test(databasePassword)) {
       throw new Error('Refusing to start in production with a development database password');
     }
   }

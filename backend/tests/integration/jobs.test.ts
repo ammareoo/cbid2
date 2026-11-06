@@ -1,13 +1,49 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { finalizeExpiredAttempts, purgeExpired, sendPendingEmails } from '../../src/jobs/jobs.js';
 import type { Mailer, MailMessage } from '../../src/mail/mailer.js';
-import { as, SEED_EMAILS, sessions, setupContext, teardown, type Ctx } from '../helpers.js';
+import { as, SEED_EMAILS, sessions, setupContext, teardown, testConfig, type Ctx } from '../helpers.js';
 
 let ctx: Ctx;
 beforeAll(async () => { ctx = await setupContext(); });
 afterAll(async () => { await teardown(ctx); });
 
+it('runs the scheduled worker once, skips overlap and releases its advisory lock', async () => {
+  const config = testConfig();
+  const run = () => promisify(execFile)(process.execPath, ['--import', 'tsx', 'src/worker.ts', '--once'], {
+    env: {
+      ...process.env, NODE_ENV: 'test', DATABASE_URL: config.DATABASE_URL,
+      DATABASE_OWNER_URL: config.DATABASE_OWNER_URL, APP_ORIGIN: config.APP_ORIGIN,
+      COOKIE_SECURE: 'false', SMTP_URL: '', LOG_LEVEL: 'info',
+    }, timeout: 30000,
+  });
+  const connection = await ctx.owner.connect();
+  try {
+    await connection.query('SELECT pg_advisory_lock(727275)');
+    const skipped = await run();
+    expect(skipped.stdout).toContain('another worker is processing jobs');
+    await connection.query('SELECT pg_advisory_unlock(727275)');
+    await run();
+    const lock = await connection.query('SELECT pg_try_advisory_lock(727275) AS locked');
+    expect(lock.rows[0].locked).toBe(true);
+    const heartbeat = await connection.query('SELECT count(*)::int AS n FROM worker_heartbeats');
+    expect(heartbeat.rows[0].n).toBeGreaterThan(0);
+  } finally {
+    await connection.query('SELECT pg_advisory_unlock_all()');
+    connection.release();
+  }
+}, 60000);
+
 describe('email outbox worker', () => {
+  it('respects a bounded batch and continues on the next invocation', async () => {
+    await ctx.owner.query('DELETE FROM email_outbox');
+    await ctx.owner.query(`INSERT INTO email_outbox (to_address, subject, body_text)
+      SELECT 'batch@cbid.example', 'Batch', 'Body' FROM generate_series(1, 3)`);
+    const mailer: Mailer = { kind: 'dev-file', async send() {} };
+    expect(await sendPendingEmails(ctx.owner, mailer, 2)).toEqual({ sent: 2, failed: 0 });
+    expect(await sendPendingEmails(ctx.owner, mailer, 2)).toEqual({ sent: 1, failed: 0 });
+  });
   it('sends pending messages and retries failures with backoff', async () => {
     await ctx.owner.query(`INSERT INTO email_outbox (to_address, subject, body_text) VALUES
       ('ok@cbid.example', 'Hello', 'Body'), ('fail@cbid.example', 'Hello', 'Body')`);
@@ -29,6 +65,13 @@ describe('email outbox worker', () => {
 });
 
 describe('retention and expiry', () => {
+  it('caps each retention delete and drains the backlog on later invocations', async () => {
+    await ctx.owner.query(`INSERT INTO notifications (user_id, kind, title, created_at)
+      SELECT $1, 'system', 'batch-expired', now() - interval '400 days' FROM generate_series(1, 501)`, [ctx.ids.students.amina]);
+    const retention = { notificationDays: 180, auditDays: 730, emailDays: 30 };
+    expect((await purgeExpired(ctx.owner, retention)).notifications).toBe(500);
+    expect((await purgeExpired(ctx.owner, retention)).notifications).toBe(1);
+  });
   it('prunes expired sessions, old notifications and old audit rows but keeps recent ones', async () => {
     const { students } = ctx.ids;
     await ctx.owner.query(`INSERT INTO sessions (user_id, token_hash, csrf_token, expires_at, idle_expires_at)

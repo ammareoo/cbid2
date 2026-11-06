@@ -43,7 +43,7 @@ describe('API client', () => {
   afterEach(() => { vi.restoreAllMocks(); setCsrfToken(null); setUnauthorizedHandler(null); });
 
   const respond = (status: number, body: unknown) =>
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } }));
 
   it('sends the CSRF token on state-changing requests only', async () => {
     const f = respond(200, { ok: true });

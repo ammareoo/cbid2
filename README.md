@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # CBID Institute LMS
 
 The learning platform of **CBID Institute**, the Centre of Excellence of **CBID Network PK Sindh**
@@ -8,8 +7,7 @@ Inclusive Education, Capacity Building Workshops and Customized Training) online
 in Karachi, and issues certificates that anyone can verify. It has three role-specific workspaces
 (learner, trainer, administrator) on one secure, database-driven core.
 
-**Setting it up?** [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) is the step-by-step guide: trying it on your own
-computer, and the full server deployment (Ubuntu, PostgreSQL, nginx, HTTPS, email, backups).
+**Setting it up?** Follow [`VERPEX_CPANEL_DEPLOYMENT.md`](VERPEX_CPANEL_DEPLOYMENT.md) for cPanel deployment and the local setup below for development. Check the unresolved hosting gates in [`DEPLOYMENT_REQUIREMENTS.md`](DEPLOYMENT_REQUIREMENTS.md) and verified results in [`PROJECT_AUDIT.md`](PROJECT_AUDIT.md) before release.
 
 How the platform was aligned with the institute's website (identity, programmes, audiences, contact details,
 certification) is described in [`docs/CBID-ALIGNMENT.md`](docs/CBID-ALIGNMENT.md).
@@ -37,13 +35,13 @@ cbid-lms/
     src/assets/   CBID Institute and CBID Network PK Sindh logos (from cbidnetwork.org)
   database/       bootstrap.sql (roles), migrations/ (schema, RLS, functions), docker-init.sh
   docs/           DEPLOYMENT, CBID-ALIGNMENT, ARCHITECTURE, SECURITY, FEATURES, screenshots/
-  scripts/        e2e-server.sh
+  scripts/        e2e-server.mjs
 ```
 
 ## Prerequisites
 
-- Node.js 22 (20.11+ works) and npm
-- PostgreSQL 16 (15+ should work; 16 is what was tested)
+- Node.js 24 and npm (release checks use 24.22.0; host offers 24.22.2). Backend dependencies require at least Node 22.
+- PostgreSQL with the roles/extensions in `database/bootstrap.sql`; release tests and restore rehearsal used PostgreSQL 18. Host server version still needs verification.
 - Optional: Redis 7, an SMTP account, Docker
 
 ## Local setup
@@ -106,9 +104,9 @@ DATABASE_OWNER_URL=... npm --prefix backend run create-admin -- --email coordina
 
 | Command | What it runs |
 | --- | --- |
-| `npm --prefix backend test` | 110 unit + integration tests against a dedicated `cbid_lms_test` database (schema rebuilt from migrations each run) |
-| `npm --prefix frontend test` | 28 unit/component tests (jsdom) |
-| `npm --prefix frontend run build && npm --prefix frontend run e2e` | 18 Playwright tests against `cbid_lms_e2e` (migrated and reseeded each run), including axe-core accessibility checks on 18 pages |
+| `npm --prefix backend test` | Unit + integration tests against a dedicated `cbid_lms_test` database (schema rebuilt from migrations each run) |
+| `npm --prefix frontend test` | Unit/component regression tests (jsdom) |
+| `npm --prefix frontend run build && npm --prefix frontend run e2e` | 23 Playwright tests against `cbid_lms_e2e` (migrated and reseeded each run), including axe-core checks and profile/mobile flows for all roles |
 | `npm run lint`, `npm run typecheck` | ESLint (incl. jsx-a11y) and TypeScript for both packages |
 
 The test databases must exist first (same bootstrap, different names):
@@ -127,7 +125,7 @@ On a new machine, run `npx playwright install chromium` once in `frontend/`.
 1. Build: `npm --prefix frontend run build && npm --prefix backend run build`.
 2. Run `node dist/scripts/migrate.js` (owner credentials) on each release, before starting the new API.
 3. Run the API (`node dist/index.js`) with `SERVE_STATIC_DIR` pointing at `frontend/dist`. This makes a
-   single origin, so cookies, CSRF and CSP stay simple. Run at least one worker (`node dist/worker.js`).
+   single origin, so cookies, CSRF and CSP stay simple. On cPanel, use bounded cron invocations (`node dist/worker.js --once`) as described in the deployment guide.
 4. Put a TLS-terminating reverse proxy in front. Set `NODE_ENV=production`, `COOKIE_SECURE=true`,
    `APP_ORIGIN=https://…` and `TRUST_PROXY=true`. The API refuses to start with insecure settings in production.
 5. Provide `SMTP_URL` and, for more than one API instance, `REDIS_URL` (shared rate limits). If you send from a
@@ -155,7 +153,3 @@ kept for 2 years and notifications for 180 days by default (`RETENTION_*` variab
 - **Changing the logos:** replace `frontend/src/assets/cbid-institute-logo.webp` and `cbid-network-logo.webp`
   (same names, transparent background). The bundled files are the 225 px high versions published on cbidnetwork.org;
   for print-quality certificates use original artwork (SVG, or PNG at least 600 px high).
-=======
-# cbid
-cbid institute lms
->>>>>>> origin/main

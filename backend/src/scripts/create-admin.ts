@@ -23,6 +23,10 @@ if (!email || !name || !url) {
 }
 
 let password = process.env.ADMIN_PASSWORD;
+if (!password && process.env.NODE_ENV === 'production') {
+  console.error('Set ADMIN_PASSWORD using a hidden terminal prompt or protected environment before creating a production administrator.');
+  process.exit(1);
+}
 if (!password) {
   const rl = createInterface({ input: stdin, output: stdout });
   password = await rl.question('Password for the new administrator: ');
@@ -41,8 +45,9 @@ try {
   await client.query('BEGIN');
   const { rows } = await client.query<{ id: string }>(
     `INSERT INTO users (email, password_hash, full_name, role) VALUES ($1, $2, $3, 'admin')
-     ON CONFLICT (email) DO UPDATE SET role = 'admin', password_hash = EXCLUDED.password_hash, status = 'active'
+     ON CONFLICT (email) DO NOTHING
      RETURNING id`, [email, hash, name]);
+  if (!rows.length) throw new Error('This email is already registered. Choose an unused email for the new administrator.');
   await client.query(
     `INSERT INTO audit_logs (actor_id, action, entity_type, entity_id, details) VALUES (NULL, 'user.admin_provisioned', 'user', $1, '{"via":"cli"}')`,
     [rows[0]!.id]);

@@ -7,13 +7,13 @@ import { ErrorSummary, QueryView, SelectField, TextField } from '../../component
 import { useToast } from '../../components/Toast';
 import { Page } from '../../layouts/AppShell';
 import { useDocumentTitle } from '../../hooks/misc';
-import { initials } from '../../utils/format';
-import { TeacherAvatar } from '../../components/CourseMedia';
+import { ProfileAvatar } from '../../components/ProfileAvatar';
 import { usePreferences, type DisplayPrefs } from '../../hooks/usePreferences';
 
 interface Profile {
   id: string; email: string; fullName: string; preferredName: string | null;
   role: 'student' | 'teacher' | 'admin'; timezone: string; lastLoginAt: string | null; departmentName: string | null;
+  photoUpdatedAt: string | null;
 }
 interface Prefs { emailAnnouncements: boolean; emailGrades: boolean; emailDeadlines: boolean }
 
@@ -32,9 +32,7 @@ function ProfileHero({ p }: { p: Profile }) {
   const name = p.preferredName || p.fullName;
   return (
     <div className="settings-hero">
-      {p.role === 'teacher'
-        ? <TeacherAvatar className="teacher-avatar--large settings-hero__avatar" />
-        : <span className="avatar settings-hero__avatar" aria-hidden="true">{initials(p.fullName)}</span>}
+      <ProfileAvatar name={p.fullName} role={p.role} photoUpdatedAt={p.photoUpdatedAt} className="settings-hero__avatar" />
       <div className="settings-hero__meta">
         <h1 tabIndex={-1} data-page-heading className="settings-hero__name">{name}</h1>
         <p className="settings-hero__sub">{p.email} · {roleLabel[p.role]}</p>
@@ -62,12 +60,37 @@ function ProfileForm({ p }: { p: Profile }) {
   const [fullName, setFullName] = useState(p.fullName);
   const [preferredName, setPreferredName] = useState(p.preferredName ?? '');
   const [timezone, setTimezone] = useState(p.timezone);
+  const [photoError, setPhotoError] = useState('');
+  const photo = useMutation({
+    mutationFn: (file: File) => api.upload('/me/profile/photo', file),
+    onSuccess: () => { setPhotoError(''); toast('Profile picture updated'); qc.invalidateQueries({ queryKey: ['me', 'profile'] }); },
+  });
+  const removePhoto = useMutation({
+    mutationFn: () => api.del('/me/profile/photo'),
+    onSuccess: () => { toast('Profile picture removed'); qc.invalidateQueries({ queryKey: ['me', 'profile'] }); },
+  });
   const m = useMutation({
     mutationFn: () => api.patch('/me/profile', { fullName, preferredName: preferredName.trim() || null, timezone }),
     onSuccess: () => { toast('Profile saved'); qc.invalidateQueries({ queryKey: ['me'] }); refresh(); },
   });
   return (
-    <form className="settings-form" onSubmit={(e) => { e.preventDefault(); m.mutate(); }} noValidate>
+    <div className="settings-form">
+      <SettingsRow label="Profile picture" hint="JPG, PNG, or WebP · up to 2 MB">
+        <div className="settings-photo-actions">
+          <label className="btn btn--secondary">
+            {photo.isPending ? 'Uploading…' : p.photoUpdatedAt ? 'Change picture' : 'Upload picture'}
+            <input type="file" accept="image/jpeg,image/png,image/webp" disabled={photo.isPending || removePhoto.isPending}
+              onChange={(e) => { const file = e.target.files?.[0]; e.target.value = ''; if (!file) return;
+                if (file.size > 2097152) { setPhotoError('Choose an image smaller than 2 MB'); return; }
+                setPhotoError(''); photo.mutate(file); }} />
+          </label>
+          {p.photoUpdatedAt && <button className="btn btn--secondary" type="button" disabled={removePhoto.isPending || photo.isPending}
+            onClick={() => removePhoto.mutate()}>{removePhoto.isPending ? 'Removing…' : 'Remove picture'}</button>}
+        </div>
+        {photoError && <p role="alert" className="field-error">{photoError}</p>}
+        <ErrorSummary error={photo.error || removePhoto.error} />
+      </SettingsRow>
+    <form onSubmit={(e) => { e.preventDefault(); m.mutate(); }} noValidate>
       <ErrorSummary error={m.error} />
       <SettingsRow label="Name">
         <TextField label="Full name" value={fullName} onChange={(e) => setFullName(e.target.value)} autoComplete="name" required maxLength={120} />
@@ -87,6 +110,7 @@ function ProfileForm({ p }: { p: Profile }) {
         <button className="btn btn--primary" type="submit" disabled={m.isPending}>{m.isPending ? 'Saving…' : 'Submit'}</button>
       </div>
     </form>
+    </div>
   );
 }
 

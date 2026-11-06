@@ -26,7 +26,7 @@ export default defineConfig({
     { name: 'mobile', use: { ...devices['Pixel 7'] }, testMatch: /responsive\.spec\.ts/ },
   ],
   webServer: {
-    command: `bash ../scripts/e2e-server.sh ${PORT}`,
+    command: `node ../scripts/e2e-server.mjs ${PORT}`,
     url: `${BASE_URL}/api/health`,
     reuseExistingServer: false,
     timeout: 60_000,

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Markdown } from '../../src/components/Markdown';
 import { ErrorSummary, QueryView, TextField, DueLabel, PublishBadge } from '../../src/components/ui';
 import { ApiError } from '../../src/api/client';
+import { Select } from '../../src/components/Select';
 import type { UseQueryResult } from '@tanstack/react-query';
 
 describe('Markdown rendering (stored XSS defence)', () => {
@@ -28,6 +29,18 @@ describe('Markdown rendering (stored XSS defence)', () => {
 });
 
 describe('form accessibility', () => {
+  it('preserves native required validation and selection events', async () => {
+    const change = vi.fn();
+    render(<label htmlFor="test-role">Role<Select id="test-role" name="role" required defaultValue="" onChange={change}>
+      <option value="">Choose a role</option><option value="teacher">Trainer</option>
+    </Select></label>);
+    const select = screen.getByRole('combobox', { name: 'Role' }) as HTMLSelectElement;
+    expect(select.checkValidity()).toBe(false);
+    await userEvent.selectOptions(select, 'teacher');
+    expect(select.checkValidity()).toBe(true);
+    expect(select).toHaveValue('teacher');
+    expect(change).toHaveBeenCalledOnce();
+  });
   it('associates labels, hints and errors with the input', () => {
     render(<TextField label="Title" hint="Short and clear" error="Enter a title" />);
     const input = screen.getByLabelText('Title');

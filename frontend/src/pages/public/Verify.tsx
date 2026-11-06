@@ -67,7 +67,7 @@ export default function Verify() {
         {notFound && <Notice tone="warn"><p>No certificate has the serial <span className="serial">{wanted}</span>. Check each character; serials never use the letters I or O or the digits 0 or 1.</p></Notice>}
         {q.error && !notFound && <ErrorSummary error={q.error} />}
       </div>
-      <p className="meta"><Link to="/login">Back to sign in</Link></p>
+      <p className="meta"><Link className="btn btn--ghost" to="/login">Back to sign in</Link></p>
     </AuthLayout>
   );
 }

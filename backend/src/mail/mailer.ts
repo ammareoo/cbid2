@@ -20,7 +20,11 @@ export interface Mailer {
  */
 export function createMailer(opts: { smtpUrl?: string; from: string; env: string; devDir?: string }): Mailer {
   if (opts.smtpUrl) {
-    const transport = nodemailer.createTransport(opts.smtpUrl);
+    const smtp = new URL(opts.smtpUrl);
+    for (const option of ['connectionTimeout', 'greetingTimeout', 'socketTimeout']) {
+      smtp.searchParams.set(option, '10000');
+    }
+    const transport = nodemailer.createTransport(smtp.toString());
     return {
       kind: 'smtp',
       async send(msg) {

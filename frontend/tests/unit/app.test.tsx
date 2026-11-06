@@ -110,6 +110,19 @@ describe('sign-in form', () => {
   });
 });
 
+describe('sign-out confirmation', () => {
+  it('keeps the session visible and reports failed server revocation', async () => {
+    mockApi('student', {
+      '/auth/logout': () => { throw new TypeError('Connection failed'); },
+    });
+    renderAt('/dashboard');
+    await userEvent.click(await screen.findByRole('button', { name: 'Account menu for Amina Khan' }));
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Sign out' }));
+    expect(await screen.findByText('Sign-out could not be confirmed. Check your connection and try again.')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /Amina/ })).toBeInTheDocument();
+  });
+});
+
 describe('CBID Institute identity and certificates', () => {
   const json = (body: unknown, status = 200) => () => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 

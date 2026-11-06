@@ -161,7 +161,9 @@ export default function AdminOverview() {
                     <h2 id="act-h">Recent activity</h2>
                     <Link to="/admin/audit">Audit log</Link>
                   </div>
-                  <div className="panel__body panel__body--flush dash-tile__scroll">
+                  {/* A scroll region needs keyboard focus so arrow/PageDown keys can reach its entries. */}
+                  {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+                  <div className="panel__body panel__body--flush dash-tile__scroll" tabIndex={0} role="region" aria-label="Recent activity entries">
                     {d.recentActivity.length === 0 ? (
                       <p className="sign__empty">No recent audit events.</p>
                     ) : (
